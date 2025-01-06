@@ -27,9 +27,6 @@ export const fetchResourcesByTopic = async (courseid, topic) => {
     const response = await fetch(`http://localhost:5000/api/resources/${courseid}/${encodeURIComponent(topic)}`);
     if (!response.ok) throw new Error("Error fetching resources for the topic");
     const data = await response.json();
-    return data.link || [];
-
-
-
+    return data.links ? [{ links: data.links }] : [];
 };
 

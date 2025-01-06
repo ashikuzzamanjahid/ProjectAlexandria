@@ -8,6 +8,7 @@ const app = express();
 const Course = require("./models/Course");
 const Topic = require("./models/Topic");
 const Resource = require("./models/Resource");
+const LinksInfo = require("./models/LinksInfo");
 
 // Middleware
 app.use(cors());
@@ -69,20 +70,109 @@ app.get("/api/topics/:courseid", async (req, res) => {
 app.get("/api/resources/:courseid/:topic", async (req, res) => {
     try {
         const { courseid, topic } = req.params;
-        // Fetch resources based on courseid and topic
-        const resources = await Resource.findOne({ courseid, topic });
-        
-        if (!resources) {
-            return res.json({ link: [] }); // Return empty array if no resources found
+
+        const resource = await Resource.findOne({ courseid, topic });
+        if (!resource) {
+            console.log("No resource found for:", courseid, topic);
+            return res.json({ links: [] });
         }
 
-        res.json(resources); // Otherwise, return the resources
+        console.log("Resource fetched:", resource);
+
+        const linksInfo = await LinksInfo.find({ topic });
+        console.log("LinksInfo fetched for topic:", topic, JSON.stringify(linksInfo, null, 2));
+
+        // Map the links with additional information
+        const mappedLinks = resource.links.map((url) => {
+            const linkInfo = linksInfo.find((info) => info.url === url);
+            return {
+                url,
+                description: linkInfo ? linkInfo.description : "",
+                likes: linkInfo ? linkInfo.likes : 0,
+                dislikes: linkInfo ? linkInfo.dislikes : 0,
+            };
+        });
+
+        // Send the combined response
+        res.json({
+            courseid: resource.courseid,
+            topic: resource.topic,
+            links: mappedLinks,
+        });
     } catch (error) {
-        console.error("Error fetching resources:", error);
-        res.status(500).json({ error: "Failed to fetch resources" });
+        console.error("Error fetching resource data:", error);
+        res.status(500).json({ error: "Failed to fetch resource data" });
     }
 });
 
+
+app.get("/test-linksinfo/:topic", async (req, res) => {
+    try {
+        const topic = req.params.topic;
+        const linksInfo = await LinksInfo.find({ topic });
+
+        console.log("Fetched linksInfo:", linksInfo);
+        res.json(linksInfo);
+    } catch (error) {
+        console.error("Error fetching linksInfo:", error);
+        res.status(500).json({ error: "Failed to fetch linksInfo" });
+    }
+});
+
+
+
+
+
+
+
+
+app.post("/api/resources/:courseid/:topic/like", async (req, res) => {
+    try {
+        const { courseid, topic } = req.params;
+        const { url } = req.body;
+        const linkInfo = await LinksInfo.findOneAndUpdate(
+            { topic, url },
+            { $inc: { likes: 1 } },
+            { new: true, upsert: true }
+        );
+        res.json({ likes: linkInfo.likes });
+    } catch (error) {
+        console.error("Error updating likes:", error);
+        res.status(500).json({ error: "Failed to update likes" });
+    }
+});
+
+app.post("/api/resources/:courseid/:topic/dislike", async (req, res) => {
+    try {
+        const { courseid, topic } = req.params;
+        const { url } = req.body;
+        const linkInfo = await LinksInfo.findOneAndUpdate(
+            { topic, url },
+            { $inc: { dislikes: 1 } },
+            { new: true, upsert: true }
+        );
+        res.json({ dislikes: linkInfo.dislikes });
+    } catch (error) {
+        console.error("Error updating dislikes:", error);
+        res.status(500).json({ error: "Failed to update dislikes" });
+    }
+});
+
+app.post("/api/resources/:courseid/:topic/description", async (req, res) => {
+    try {
+        const { courseid, topic } = req.params;
+        const { url, description } = req.body;
+        const linkInfo = await LinksInfo.findOneAndUpdate(
+            { topic, url },
+            { description },
+            { new: true, upsert: true }
+        );
+        res.json({ description: linkInfo.description });
+    } catch (error) {
+        console.error("Error updating description:", error);
+        res.status(500).json({ error: "Failed to update description" });
+    }
+});
 
 // Start the server
 const PORT = process.env.PORT || 5000;
