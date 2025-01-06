@@ -2,9 +2,9 @@ const mongoose = require("mongoose");
 
 // Define schema for resources
 const resourceSchema = new mongoose.Schema({
-    courseid: { type: String, required: true }, // Reference to the course ID
-    topic: { type: String, required: true }, // Name of the topic
-    links: { type: [String], default: [] }, // Array of resource links
+    courseid: { type: String, required: true },
+    topic: { type: String, required: true },
+    links: { type: [String], required: true }
 });
 
 // Export the Resource model
