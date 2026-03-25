@@ -2,179 +2,109 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
+const { MongoMemoryServer } = require("mongodb-memory-server");
 
 dotenv.config();
-const app = express();
+
+if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET is required but missing in environment configuration.");
+    process.exit(1);
+}
+
 const Course = require("./models/Course");
 const Topic = require("./models/Topic");
 const Resource = require("./models/Resource");
 const LinksInfo = require("./models/LinksInfo");
+const User = require("./models/User");
+const ResourceSubmission = require("./models/ResourceSubmission");
+const ResourceReport = require("./models/ResourceReport");
+const ResourceVote = require("./models/ResourceVote");
+const { seedDatabase } = require("./scripts/seedData");
+const { createAuthRoutes } = require("./routes/authRoutes");
+const { createLibraryRoutes } = require("./routes/libraryRoutes");
+const { createAdminRoutes } = require("./routes/adminRoutes");
+const {
+    SECTION_TYPES,
+    normalizeSection,
+    validateHttpUrl,
+    parsePagination,
+} = require("./utils/requestUtils");
+const { createResourceExists } = require("./utils/resourceUtils");
 
-// Middleware
+const app = express();
+const MONGO_URL = process.env.MONGO_URL || "mongodb://localhost:27017/courselibrary";
+const PORT = process.env.PORT || 5000;
+
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection
-mongoose.connect("mongodb://localhost:27017/courselibrary")
-    .then(() => console.log("Connected to MongoDB"))
-    .catch(err => console.error("MongoDB connection error:", err));
+const resourceExists = createResourceExists(Resource);
 
-// API Endpoints
-app.get("/api/topics", async (req, res) => {
+app.use("/api/auth", createAuthRoutes({ User }));
+app.use(
+    "/api",
+    createLibraryRoutes({
+        Course,
+        Topic,
+        Resource,
+        LinksInfo,
+        ResourceSubmission,
+        ResourceReport,
+        ResourceVote,
+        SECTION_TYPES,
+        normalizeSection,
+        validateHttpUrl,
+        resourceExists,
+    })
+);
+app.use(
+    "/api/admin",
+    createAdminRoutes({
+        Resource,
+        LinksInfo,
+        ResourceSubmission,
+        ResourceReport,
+        ResourceVote,
+        parsePagination,
+        normalizeSection,
+        validateHttpUrl,
+    })
+);
+
+let memoryMongoServer = null;
+
+const connectDatabase = async () => {
     try {
-        const courses = await Course.find({}, "courseid coursename");
-        res.json(courses);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch courses" });
+        await mongoose.connect(MONGO_URL, { serverSelectionTimeoutMS: 3000 });
+        console.log(`Connected to MongoDB: ${MONGO_URL}`);
+        return { mode: "external" };
+    } catch {
+        console.warn("Local MongoDB unavailable. Falling back to in-memory MongoDB for testing.");
+        memoryMongoServer = await MongoMemoryServer.create({ instance: { dbName: "courselibrary" } });
+        const memoryUri = memoryMongoServer.getUri();
+        await mongoose.connect(memoryUri);
+        console.log(`Connected to in-memory MongoDB: ${memoryUri}`);
+        return { mode: "memory" };
     }
-});
+};
 
-app.get("/api/alltopics", async (req, res) => {
+const startServer = async () => {
     try {
-        const topics = await Topic.find({});
-        res.json(topics.flatMap(topic => topic.topics));
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch topics" });
-    }
-});
-
-app.get("/api/allresources", async (req, res) => {
-    try {
-        const resources = await Resource.find({});
-        res.json(resources.flatMap(r => r.links.map(link => ({ courseid: r.courseid, topic: r.topic, link }))));
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch resources" });
-    }
-});
-
-app.get("/api/topics/:courseid", async (req, res) => {
-    try {
-        const { courseid } = req.params;
-        const course = await Course.findOne({ courseid });
-        if (!course) return res.status(404).json({ message: "Course not found" });
-
-        const topics = await Topic.findOne({ courseid });
-        if (!topics) return res.status(404).json({ message: "Topics not found" });
-
-        res.json({
-            courseid: course.courseid,
-            coursename: course.coursename,
-            numberOfTopics: topics.topics.length,
-            topics: topics.topics
-        });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch course details" });
-    }
-});
-
-app.get("/api/resources/:courseid/:topic", async (req, res) => {
-    try {
-        const { courseid, topic } = req.params;
-
-        const resource = await Resource.findOne({ courseid, topic });
-        if (!resource) {
-            console.log("No resource found for:", courseid, topic);
-            return res.json({ links: [] });
+        const db = await connectDatabase();
+        const seedResult = await seedDatabase();
+        if (seedResult.seeded) {
+            console.log("Sample data seeded for testing.");
         }
-
-        console.log("Resource fetched:", resource);
-
-        const linksInfo = await LinksInfo.find({ topic });
-        console.log("LinksInfo fetched for topic:", topic, JSON.stringify(linksInfo, null, 2));
-
-        // Map the links with additional information
-        const mappedLinks = resource.links.map((url) => {
-            const linkInfo = linksInfo.find((info) => info.url === url);
-            return {
-                url,
-                description: linkInfo ? linkInfo.description : "",
-                likes: linkInfo ? linkInfo.likes : 0,
-                dislikes: linkInfo ? linkInfo.dislikes : 0,
-            };
-        });
-
-        // Send the combined response
-        res.json({
-            courseid: resource.courseid,
-            topic: resource.topic,
-            links: mappedLinks,
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT} (${db.mode})`);
         });
     } catch (error) {
-        console.error("Error fetching resource data:", error);
-        res.status(500).json({ error: "Failed to fetch resource data" });
+        console.error("Server startup failed:", error);
+        if (memoryMongoServer) {
+            await memoryMongoServer.stop();
+        }
+        process.exit(1);
     }
-});
+};
 
-
-app.get("/test-linksinfo/:topic", async (req, res) => {
-    try {
-        const topic = req.params.topic;
-        const linksInfo = await LinksInfo.find({ topic });
-
-        console.log("Fetched linksInfo:", linksInfo);
-        res.json(linksInfo);
-    } catch (error) {
-        console.error("Error fetching linksInfo:", error);
-        res.status(500).json({ error: "Failed to fetch linksInfo" });
-    }
-});
-
-
-
-
-
-
-
-
-app.post("/api/resources/:courseid/:topic/like", async (req, res) => {
-    try {
-        const { courseid, topic } = req.params;
-        const { url } = req.body;
-        const linkInfo = await LinksInfo.findOneAndUpdate(
-            { topic, url },
-            { $inc: { likes: 1 } },
-            { new: true, upsert: true }
-        );
-        res.json({ likes: linkInfo.likes });
-    } catch (error) {
-        console.error("Error updating likes:", error);
-        res.status(500).json({ error: "Failed to update likes" });
-    }
-});
-
-app.post("/api/resources/:courseid/:topic/dislike", async (req, res) => {
-    try {
-        const { courseid, topic } = req.params;
-        const { url } = req.body;
-        const linkInfo = await LinksInfo.findOneAndUpdate(
-            { topic, url },
-            { $inc: { dislikes: 1 } },
-            { new: true, upsert: true }
-        );
-        res.json({ dislikes: linkInfo.dislikes });
-    } catch (error) {
-        console.error("Error updating dislikes:", error);
-        res.status(500).json({ error: "Failed to update dislikes" });
-    }
-});
-
-app.post("/api/resources/:courseid/:topic/description", async (req, res) => {
-    try {
-        const { courseid, topic } = req.params;
-        const { url, description } = req.body;
-        const linkInfo = await LinksInfo.findOneAndUpdate(
-            { topic, url },
-            { description },
-            { new: true, upsert: true }
-        );
-        res.json({ description: linkInfo.description });
-    } catch (error) {
-        console.error("Error updating description:", error);
-        res.status(500).json({ error: "Failed to update description" });
-    }
-});
-
-// Start the server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
+startServer();

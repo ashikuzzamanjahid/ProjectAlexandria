@@ -1,0 +1,154 @@
+/* ── Auth form ───────────────────────────────────────────── */
+.auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.auth-modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    position: relative;
+}
+
+.auth-modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0 0 20px;
+    color: #222;
+}
+
+.auth-field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 14px;
+}
+
+.auth-field label {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.auth-field input {
+    padding: 9px 12px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.auth-field input:focus {
+    border-color: #0078d4;
+}
+
+.auth-error {
+    color: #c00;
+    font-size: 0.85rem;
+    margin: 0 0 12px;
+    background: #fff5f5;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.btn-auth-submit {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    background: #0078d4;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+    margin-top: 4px;
+}
+
+.btn-auth-submit:hover   { background: #005fa3; }
+.btn-auth-submit:disabled { background: #aaa; cursor: not-allowed; }
+
+.auth-toggle {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 0.88rem;
+    color: #666;
+}
+
+.auth-toggle button {
+    background: none;
+    border: none;
+    color: #0078d4;
+    cursor: pointer;
+    font-size: 0.88rem;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.btn-auth-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #aaa;
+    cursor: pointer;
+}
+
+.btn-auth-close:hover { color: #333; }
+
+/* ── Navbar user bar ─────────────────────────────────────── */
+.user-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 0.88rem;
+    color: #555;
+}
+
+.user-bar .user-name {
+    font-weight: 600;
+    color: #333;
+}
+
+.btn-login {
+    padding: 5px 14px;
+    background: #0078d4;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.btn-login:hover { background: #005fa3; }
+
+.btn-logout {
+    padding: 5px 12px;
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #555;
+    transition: border-color 0.2s;
+}
+
+.btn-logout:hover { border-color: #888; color: #222; }

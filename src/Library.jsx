@@ -1,264 +1,144 @@
-import React, { useState, useEffect } from "react";
-import { fetchCourses, fetchAllTopics, fetchAllResources, fetchCourseDetails, fetchResourcesByTopic } from './api';
+import React, { useState } from "react";
+import AuthForm from "./AuthForm";
+import AdminPanel from "./components/AdminPanel";
+import CourseTreePanel from "./components/CourseTreePanel";
+import TopicWorkbench from "./components/TopicWorkbench";
+import useAuthSession from "./hooks/useAuthSession";
+import useCourseCatalog from "./hooks/useCourseCatalog";
+import useLibraryWorkbench from "./hooks/useLibraryWorkbench";
+import { SECTION_LABEL } from "./constants/librarySections";
+import "./Library.css";
+import "./AuthForm.css";
 
-const ResourceBox = ({ link, courseid, topic }) => {
-    const [likes, setLikes] = useState(0);
-    const [dislikes, setDislikes] = useState(0);
-    const [description, setDescription] = useState("");
+export default function Library() {
+    const { token, user, onAuthSuccess, logout } = useAuthSession();
+    const {
+        courses,
+        filteredCourses,
+        searchQuery,
+        loadingCourses,
+        courseError,
+        handleSearch,
+    } = useCourseCatalog();
+    const [showAuth, setShowAuth] = useState(false);
 
-    useEffect(() => {
-        const fetchLinkInfo = async () => {
-            try {
-                const response = await fetch(`/api/resources/${courseid}/${topic}`);
-                const data = await response.json();
-    
-                console.log("Fetched Data:", data);
-    
-                const linkInfo = data.links.find(l => l.url === link);
-    
-                console.log("Matched Link Info:", linkInfo);
-    
-                if (linkInfo) {
-                    setLikes(linkInfo.likes || 0);
-                    setDislikes(linkInfo.dislikes || 0);
-                    setDescription(linkInfo.description || "");
-                }
-            } catch (error) {
-                console.error("Failed to fetch link info:", error);
-            }
-        };
-        fetchLinkInfo();
-    }, [link, courseid, topic]);
-    
-    
-    
-    
+    const {
+        SECTION_ORDER,
+        courseDetailsById,
+        expandedCourses,
+        selectedCourse,
+        selectedTopic,
+        selectedSection,
+        resources,
+        groupedResources,
+        loadingTopics,
+        loadingResources,
+        topicError,
+        resourceError,
+        setSelectedSection,
+        handleCourseSelect,
+        handleCourseToggle,
+        handleTreeTopicSelect,
+        handleLike,
+        handleDislike,
+        handleDescriptionSave,
+        handleReport,
+        handleSubmitResource,
+        handleAdminDelete,
+    } = useLibraryWorkbench(token);
 
-    const handleLike = async () => {
-        const response = await fetch(`/api/resources/${courseid}/${topic}/like`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: link })
-        });
-        const data = await response.json();
-        setLikes(parseInt(data.likes));
+    const totalLinks = resources.length;
+    const totalTopics = selectedCourse?.topics?.length || 0;
+    const openSectionLinks = groupedResources[selectedSection]?.length || 0;
+
+    const handleAuthSuccess = (newToken, email, displayName, role = "student") => {
+        onAuthSuccess(newToken, email, displayName, role);
+        setShowAuth(false);
     };
 
-    const handleDislike = async () => {
-        const response = await fetch(`/api/resources/${courseid}/${topic}/dislike`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: link })
-        });
-        const data = await response.json();
-        setDislikes(parseInt(data.dislikes));
-    };
-
-    const handleDescriptionChange = async (e) => {
-        const newDescription = e.target.value;
-        setDescription(newDescription);
-        await fetch(`/api/resources/${courseid}/${topic}/description`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: link, description: newDescription })
-        });
+    const handleLogout = () => {
+        logout();
     };
 
     return (
-        <div className="resource-box" style={{ border: "1px solid #ccc", padding: "15px", marginBottom: "15px", borderRadius: "10px", backgroundColor: "#f9f9f9" }}>
-            <a href={link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#007bff", fontSize: "16px" }}>{link}</a>
-            <div style={{ marginTop: "10px" }}>
-                <textarea
-                    placeholder="description..."
-                    value={description}
-                    onChange={handleDescriptionChange}
-                    style={{ width: "100%", padding: "10px", borderRadius: "5px", border: "1px solid #ccc", marginBottom: "10px" }}
-                />
-                <button onClick={handleLike} style={{ marginRight: "10px", padding: "5px 10px", borderRadius: "5px", border: "none", backgroundColor: "#28a745", color: "#fff" }}>Like</button>
-                <span style={{ marginRight: "20px" }}>{likes}</span>
-                <button onClick={handleDislike} style={{ padding: "5px 10px", borderRadius: "5px", border: "none", backgroundColor: "#dc3545", color: "#fff" }}>Dislike</button>
-                <span>{dislikes}</span>
-            </div>
+        <div className="alexandria-shell">
+            <div className="alexandria-backdrop" />
+
+            {showAuth && <AuthForm onSuccess={handleAuthSuccess} onClose={() => setShowAuth(false)} />}
+
+            <main className="alexandria-app">
+                <section className="hero-band">
+                    <div>
+                        <p className="eyebrow">Resource Library</p>
+                        <h1 className="hero-title">Project Alexandria</h1>
+                        <p className="hero-copy">
+                            Browse courses, open a topic, and work through the best links by section.
+                        </p>
+                    </div>
+                    <div className="hero-stats">
+                        <div className="hero-stat">
+                            <span className="hero-stat__label">Courses</span>
+                            <strong>{courses.length}</strong>
+                        </div>
+                        <div className="hero-stat">
+                            <span className="hero-stat__label">Topics</span>
+                            <strong>{totalTopics}</strong>
+                        </div>
+                        <div className="hero-stat">
+                            <span className="hero-stat__label">Visible Links</span>
+                            <strong>{totalLinks}</strong>
+                        </div>
+                    </div>
+                </section>
+
+                <section className="workspace-grid">
+                    <CourseTreePanel
+                        user={user}
+                        onLogout={handleLogout}
+                        onSignIn={() => setShowAuth(true)}
+                        searchQuery={searchQuery}
+                        onSearch={handleSearch}
+                        loadingCourses={loadingCourses}
+                        courseError={courseError}
+                        filteredCourses={filteredCourses}
+                        expandedCourses={expandedCourses}
+                        courseDetailsById={courseDetailsById}
+                        selectedCourse={selectedCourse}
+                        selectedTopic={selectedTopic}
+                        onCourseToggle={handleCourseToggle}
+                        onCourseSelect={handleCourseSelect}
+                        onTopicSelect={handleTreeTopicSelect}
+                    />
+
+                    <section className="content-panel glass-card">
+                        {user?.role === "admin" && token && <AdminPanel token={token} />}
+                        <TopicWorkbench
+                            selectedCourse={selectedCourse}
+                            selectedTopic={selectedTopic}
+                            selectedSection={selectedSection}
+                            selectedSectionLabel={SECTION_LABEL[selectedSection]}
+                            openSectionLinks={openSectionLinks}
+                            loadingTopics={loadingTopics}
+                            topicError={topicError}
+                            loadingResources={loadingResources}
+                            resourceError={resourceError}
+                            sectionOrder={SECTION_ORDER}
+                            sectionLabels={SECTION_LABEL}
+                            groupedResources={groupedResources}
+                            onSelectSection={setSelectedSection}
+                            token={token}
+                            user={user}
+                            onLike={handleLike}
+                            onDislike={handleDislike}
+                            onDescriptionSave={handleDescriptionSave}
+                            onReport={handleReport}
+                            onDelete={handleAdminDelete}
+                            onSubmitResource={handleSubmitResource}
+                            onSignIn={() => setShowAuth(true)}
+                        />
+                    </section>
+                </section>
+            </main>
         </div>
     );
-};
-
-const Library = () => {
-    const [courseIds, setCourseIds] = useState([]);
-    const [topics, setTopics] = useState([]);
-    const [resources, setResources] = useState([]);
-    const [selectedCourse, setSelectedCourse] = useState(null);
-    const [selectedTopic, setSelectedTopic] = useState(null);
-    const [loadingTopics, setLoadingTopics] = useState(false);
-    const [loadingResources, setLoadingResources] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [filteredCourses, setFilteredCourses] = useState([]);
-    const [filteredTopics, setFilteredTopics] = useState([]);
-    const [filteredResources, setFilteredResources] = useState([]);
-
-    useEffect(() => {
-        // Fetch all data on mount
-        fetchCoursesData();
-        fetchTopicsData();
-        fetchResourcesData();
-    }, []);
-
-    const fetchCoursesData = async () => {
-        try {
-            const data = await fetchCourses();
-            setCourseIds(data);
-            setFilteredCourses(data);
-        } catch (error) {
-            console.error("Error fetching courses:", error);
-        }
-    };
-
-    const fetchTopicsData = async () => {
-        try {
-            const data = await fetchAllTopics();
-            setTopics(data);
-            setFilteredTopics(data);
-        } catch (error) {
-            console.error("Error fetching topics:", error);
-        }
-    };
-
-    const fetchResourcesData = async () => {
-        try {
-            const data = await fetchAllResources();
-            setResources(data);
-        } catch (error) {
-            console.error("Error fetching resources:", error);
-        }
-    };
-
-    const handleSearch = (e) => {
-        const query = e.target.value.toLowerCase();
-        setSearchQuery(query);
-
-        // Filter courses, topics, and resources based on the search query
-        const filteredCourses = courseIds.filter(course => 
-            course.coursename.toLowerCase().includes(query) || 
-            course.courseid.toLowerCase().includes(query)
-        );
-
-        const filteredTopics = topics.filter(topic =>
-            topic.toLowerCase().includes(query)
-        );
-
-        const filteredResources = resources.filter(resource =>
-            resource.links.some(link => link.toLowerCase().includes(query))
-        );
-
-        // Update the filtered data states
-        setFilteredCourses(filteredCourses);
-        setFilteredTopics(filteredTopics);
-        setFilteredResources(filteredResources);
-    };
-
-    const handleCourseSelect = async (courseid) => {
-        setLoadingTopics(true);
-        try {
-            const data = await fetchCourseDetails(courseid);
-            setSelectedCourse(data);
-            setLoadingTopics(false);
-            setSelectedTopic(null);
-            setResources([]);
-        } catch (error) {
-            console.error("Error fetching course details:", error);
-            setLoadingTopics(false);
-        }
-    };
-
-    const handleTopicSelect = async (courseid, topic) => {
-        setLoadingResources(true);
-        try {
-            const data = await fetchResourcesByTopic(courseid, topic);
-            console.log("API Response for topic:", topic, data); // Log API response
-            setResources(data || []); // Ensure empty array if no resources
-            setFilteredResources(data.flatMap(resource => resource.links) || []); // Update filtered resources
-            setSelectedTopic(topic);
-        } catch (error) {
-            console.error("Error fetching resources for topic:", topic, error);
-            setResources([]); // Fallback to no resources
-            setFilteredResources([]); // Fallback to no filtered resources
-        } finally {
-            setLoadingResources(false);
-        }
-    };
-
-    return (
-        <div style={{ fontFamily: "Arial, sans-serif", padding: "20px" }}>
-            <h1 style={{ textAlign: "center", color: "#333" }}>Course Library</h1>
-
-            {/* Search Box */}
-            <input
-                type="text"
-                placeholder="Search courses, topics, resources"
-                value={searchQuery}
-                onChange={handleSearch}
-                style={{ width: "100%", padding: "10px", fontSize: "16px", marginBottom: "20px", borderRadius: "5px", border: "1px solid #ccc" }}
-            />
-
-            <h2 style={{ color: "#555" }}>Courses</h2>
-            <ul style={{ listStyleType: "none", padding: 0 }}>
-                {filteredCourses.map((course) => (
-                    <li
-                        key={course.courseid}
-                        onClick={() => handleCourseSelect(course.courseid)}
-                        style={{ border: "1px solid #ccc", padding: "15px", marginBottom: "10px", borderRadius: "10px", cursor: "pointer", backgroundColor: "#f9f9f9" }}
-                    >
-                        <strong>Course Name:</strong> {course.coursename} <br />
-                        <strong>Course ID:</strong> {course.courseid}
-                    </li>
-                ))}
-            </ul>
-
-            {/* Course Details */}
-            {selectedCourse && (
-                <div style={{ border: "1px solid #ccc", padding: "20px", marginTop: "20px", borderRadius: "10px", backgroundColor: "#f9f9f9" }}>
-                    <h2 style={{ color: "#555" }}>Course Details</h2>
-                    <p><strong>Course ID:</strong> {selectedCourse.courseid}</p>
-                    <p><strong>Course Name:</strong> {selectedCourse.coursename}</p>
-                    <p><strong>Number of Topics:</strong> {selectedCourse.numberOfTopics}</p>
-
-                    {/* Render Topics */}
-                    <ul style={{ listStyleType: "none", padding: 0 }}>
-                        {selectedCourse.topics.length > 0 ? (
-                            selectedCourse.topics.map((topic) => (
-                                <li
-                                    key={topic}
-                                    onClick={() => handleTopicSelect(selectedCourse.courseid, topic)}
-                                    style={{ border: "1px solid #ddd", padding: "10px", marginBottom: "10px", borderRadius: "10px", cursor: "pointer", backgroundColor: "#fff" }}
-                                >
-                                    {topic}
-                                    {selectedTopic === topic && (
-                                        <ul style={{ marginTop: "10px", paddingLeft: "20px" }}>
-                                            {loadingResources ? (
-                                                <li>Loading resources...</li>
-                                            ) : filteredResources.length > 0 ? (
-                                                filteredResources.map((link, index) => (
-                                                    <li key={index}>
-                                                        <ResourceBox key={index} link={link.url} courseid={selectedCourse.courseid} topic={selectedTopic} />
-                                                    </li>
-                                                ))
-                                            ) : (
-                                                <li>No resources available.</li>
-                                            )}
-                                        </ul>
-                                    )}
-                                </li>
-                            ))
-                        ) : (
-                            <li>No topics available for this course.</li>
-                        )}
-                    </ul>
-                </div>
-            )}
-
-            {loadingTopics && <p>Loading course details...</p>}
-        </div>
-    );
-};
-
-export default Library;
+}
